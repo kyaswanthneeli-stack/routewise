@@ -94,3 +94,7 @@ Next steps: evaluated semantic classifier, held-out quality/cost dataset, provid
 - [Railway deployment configuration](railway.json) with Docker and `/health`.
 
 **Hosting status:** deployment *configured*, not a claimed live production API. A hosting service and an authenticated server-side `ROUTEWISE_API_KEY` are required. With no provider credentials, responses are explicitly labeled mock demonstrations. Never publish a live upstream key in client-side code.
+
+## Captioned architecture video
+
+[Download the 20-second MP4 architecture explainer from the latest successful Actions run](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/walkthrough.yml). The source-of-truth render script is [docs/build_walkthrough.py](docs/build_walkthrough.py). The video is **captioned and silent** and explains the code architecture; it is **not** a recording of a live external API or paid model. Use the demo instructions above to show real backend behavior.
