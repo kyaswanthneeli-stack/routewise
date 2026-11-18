@@ -55,7 +55,24 @@ def create_app(providers=None, transport=None, api_key=None):
     )
     class PublicRoute(BaseModel):
         text: str = Field(min_length=1, max_length=4000)
-        preference: str = Field(default='auto', pattern=r'^(auto|fast|reasoning)
+        preference: str = Field(default='auto', pattern='^(auto|fast|reasoning)$')
+    @app.get('/public/status')
+    def public_status():
+        return {'status':'ok','routing':'operational','provider_calls_available': bool(providers),
+                'model_inference':'configured' if providers else 'not_configured'}
+    @app.post('/public/route')
+    def public_route(payload:PublicRoute):
+        # This public endpoint computes only actual route decisions; never invokes upstream providers.
+        tier, reason=classify([Message(role='user',content=payload.text)])
+        if payload.preference != 'auto':
+            tier=payload.preference
+            reason={'method':'explicit override','signals':[],'characters':len(payload.text)}
+        other='reasoning' if tier=='fast' else 'fast'
+        return {'selected':tier,'alternate':other,'routing':reason,
+                'provider_calls_executed':0,'model_response':None,
+                'mode':'real_server_side_route_decision',
+                'note':'This endpoint computes real routing decisions without calling a model. '
+                       'LLM completions require private upstream provider configuration.'}
     async def invoke(provider,request):
         if not provider.url: return {'choices':[{'index':0,'message':{'role':'assistant','content':f'Demo response from {provider.name}; no language model was called.'},'finish_reason':'stop'}],'usage':{'prompt_tokens':0,'completion_tokens':0,'total_tokens':0}}
         async with httpx.AsyncClient(timeout=15,transport=transport,follow_redirects=False) as client:
