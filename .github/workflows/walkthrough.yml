@@ -1,0 +1,30 @@
+name: Architecture video walkthrough
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/build_walkthrough.py'
+      - '.github/workflows/walkthrough.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Pillow
+        run: python -m pip install 'Pillow>=10,<13'
+      - name: Render captioned architecture explainer
+        run: python docs/build_walkthrough.py
+      - name: Upload 20-second MP4 video
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-walkthrough-mp4
+          path: docs/walkthrough.mp4
