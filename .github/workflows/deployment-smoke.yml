@@ -1,0 +1,40 @@
+name: Public deployment smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deployment-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-public-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify public health and API docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://routewise-production-c8aefb65.up.railway.app"
+          for attempt in {1..12}; do
+            if curl --connect-timeout 8 --max-time 20 --fail --silent --show-error "$BASE/health" -o health.json; then break; fi
+            sleep 5
+          done
+          python3 -m json.tool health.json
+          python3 - <<'PY'
+          import json
+          with open("health.json", encoding="utf8") as f:
+              health=json.load(f)
+          assert health.get("status")=="ok", health
+          print("Public health endpoint verified")
+          PY
+          curl --connect-timeout 8 --max-time 20 --fail --silent --show-error "$BASE/docs" -o docs.html
+          grep -q 'swagger-ui' docs.html
+          echo "Public API documentation verified"
+          STATUS="$(curl --connect-timeout 8 --max-time 20 --silent --show-error --output /dev/null --write-out '%{http_code}' "$BASE/metrics")"
+          test "$STATUS" = "401"
+          echo "Unauthenticated access denied as expected (HTTP 401)"
