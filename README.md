@@ -84,3 +84,13 @@ No under-15ms classifier benchmark is claimed. End-to-end latency is measured pe
 The public `docs/index.html` playground simulates provider outcomes entirely in the browser. It never calls a model. The Python API requires a separate backend host; GitHub Pages serves static assets only. The Dockerfile uses an unprivileged user. Supply environment variables through your host's secret settings and add TLS, ingress rate limiting, persistent monitoring and operational controls before wider deployment. Metrics are memory-only and reset on restart. Heuristic misrouting and fallback quality regression are expected limitations.
 
 Next steps: evaluated semantic classifier, held-out quality/cost dataset, provider-specific token limits, streaming, durable observability and admission control.
+
+## Engineering verification and deployment
+
+[![CI](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/ci.yml/badge.svg)](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/ci.yml)
+
+- [Architecture diagram, five-minute walkthrough and hosting checklist](docs/ARCHITECTURE_AND_DEMO.md)
+- [GitHub Actions tests and Docker build results](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/ci.yml)
+- [Railway deployment configuration](railway.json) with Docker and `/health`.
+
+**Hosting status:** deployment *configured*, not a claimed live production API. A hosting service and an authenticated server-side `ROUTEWISE_API_KEY` are required. With no provider credentials, responses are explicitly labeled mock demonstrations. Never publish a live upstream key in client-side code.
