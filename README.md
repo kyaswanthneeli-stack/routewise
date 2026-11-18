@@ -98,3 +98,13 @@ Next steps: evaluated semantic classifier, held-out quality/cost dataset, provid
 ## Captioned architecture video
 
 [Download the 20-second MP4 architecture explainer from the latest successful Actions run](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/walkthrough.yml). The source-of-truth render script is [docs/build_walkthrough.py](docs/build_walkthrough.py). The video is **captioned and silent** and explains the code architecture; it is **not** a recording of a live external API or paid model. Use the demo instructions above to show real backend behavior.
+
+## Live hosted API — verified
+
+**Public API documentation:** https://routewise-production-c8aefb65.up.railway.app/docs
+
+**Unauthenticated health endpoint:** https://routewise-production-c8aefb65.up.railway.app/health
+
+[![Live public API smoke test](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/deployment-smoke.yml/badge.svg)](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/deployment-smoke.yml)
+
+This is a live Railway-hosted Python backend, built from the public GitHub repository. GitHub-hosted smoke tests verify that `/health` returns a valid healthy JSON response, `/docs` serves Swagger UI, and the protected endpoint rejects requests without authentication (HTTP 401). **Secrets are stored as Railway backend environment variables, never in this repository.** The publicly viewable API documentation doesn't grant access to privileged operations. Real model inference is not configured; requests return explicitly labeled demo responses until server-side provider credentials are added. For architecture and setup details, see [the engineering walkthrough](docs/ARCHITECTURE_AND_DEMO.md).
