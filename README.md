@@ -75,13 +75,13 @@ flowchart TD
 python -m unittest -v
 ```
 
-14 tests exercise authentication, classification, overrides, demo labeling, stream rejection, mocked rate limits and timeouts, non-retryable errors, malformed upstream responses, total outage and prompt-free metrics. Live provider credentials were not used in these tests.
+18 tests exercise authentication, classification, overrides, demo labeling, stream rejection, mocked rate limits and timeouts, non-retryable errors, malformed upstream responses, total outage and prompt-free metrics. Live provider credentials were not used in these tests.
 
 ## Honest measurement and deployment
 
 No under-15ms classifier benchmark is claimed. End-to-end latency is measured per request and includes provider attempts. Costs are unknown by default (`null`); the Python `Provider` object permits explicit per-million input/output prices for an estimate based on returned usage. No current prices or savings percentages are embedded.
 
-The public `docs/index.html` playground simulates provider outcomes entirely in the browser. It never calls a model. The Python API requires a separate backend host; GitHub Pages serves static assets only. The Dockerfile uses an unprivileged user. Supply environment variables through your host's secret settings and add TLS, ingress rate limiting, persistent monitoring and operational controls before wider deployment. Metrics are memory-only and reset on restart. Heuristic misrouting and fallback quality regression are expected limitations.
+The public `docs/index.html` playground calls the Python `/public/route` endpoint for real server-side route selection. It never calls a model or fabricates provider responses. The Python API requires a separate backend host; GitHub Pages serves static assets only. The Dockerfile uses an unprivileged user. Supply environment variables through your host's secret settings and add TLS, ingress rate limiting, persistent monitoring and operational controls before wider deployment. Metrics are memory-only and reset on restart. Heuristic misrouting and fallback quality regression are expected limitations.
 
 Next steps: evaluated semantic classifier, held-out quality/cost dataset, provider-specific token limits, streaming, durable observability and admission control.
 
@@ -93,7 +93,7 @@ Next steps: evaluated semantic classifier, held-out quality/cost dataset, provid
 - [GitHub Actions tests and Docker build results](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/ci.yml)
 - [Railway deployment configuration](railway.json) with Docker and `/health`.
 
-**Hosting status:** deployment *configured*, not a claimed live production API. A hosting service and an authenticated server-side `ROUTEWISE_API_KEY` are required. With no provider credentials, responses are explicitly labeled mock demonstrations. Never publish a live upstream key in client-side code.
+**Hosting status:** deployed on Railway at https://routewise-production-c8aefb65.up.railway.app/docs. The portfolio now calls the public, bounded backend endpoints described below. Privileged endpoints remain authenticated; no credentials are shipped to the browser.
 
 ## Captioned architecture video
 
@@ -108,3 +108,12 @@ Next steps: evaluated semantic classifier, held-out quality/cost dataset, provid
 [![Live public API smoke test](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/deployment-smoke.yml/badge.svg)](https://github.com/kyaswanthneeli-stack/routewise/actions/workflows/deployment-smoke.yml)
 
 This is a live Railway-hosted Python backend, built from the public GitHub repository. GitHub-hosted smoke tests verify that `/health` returns a valid healthy JSON response, `/docs` serves Swagger UI, and the protected endpoint rejects requests without authentication (HTTP 401). **Secrets are stored as Railway backend environment variables, never in this repository.** The publicly viewable API documentation doesn't grant access to privileged operations. Real model inference is not configured; requests return explicitly labeled demo responses until server-side provider credentials are added. For architecture and setup details, see [the engineering walkthrough](docs/ARCHITECTURE_AND_DEMO.md).
+
+## Live browser workflow
+
+1. Open the linked routing playground and enter a prompt.
+2. Select `auto`, `fast` or `reasoning`, then click **Route on server**.
+3. The browser calls `/public/route`; the Python classifier returns the selected tier, alternate tier and decision signals.
+4. `/public/status` reports whether upstream providers are configured. Public routing always performs zero provider calls, even if private inference is configured.
+
+No client or upstream keys are embedded in the frontend. Connection failures are shown instead of simulated success. The browser route preview does not generate an answer. To enable real completions for authenticated clients, set the provider variables above privately in Railway and redeploy, then call `/v1/chat/completions` using your gateway bearer token. The currently inspected deployment has no upstream provider configured.
