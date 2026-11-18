@@ -29,4 +29,24 @@ class Tests(unittest.TestCase):
   self.assertEqual(self.post(self.client(handler)).status_code,502);self.assertEqual(len(seen),1)
  def test_bad_response(self):self.assertEqual(self.post(self.client(lambda req:httpx.Response(200,json={'bad':1}))).status_code,502)
  def test_no_prompt_metrics(self):self.post();self.assertNotIn('hello',self.c.get('/metrics',headers=self.h).text)
+
+ def test_public_route_is_real_server_classification(self):
+  response=self.c.post('/public/route',json={'text':'Analyze architecture tradeoffs'})
+  self.assertEqual(response.status_code,200)
+  body=response.json()
+  self.assertEqual(body['selected'],'reasoning')
+  self.assertEqual(body['routing']['method'],'deterministic heuristic')
+  self.assertEqual(body['provider_calls_executed'],0)
+  self.assertIsNone(body['model_response'])
+ def test_public_route_uses_override_and_validates(self):
+  result=self.c.post('/public/route',json={'text':'hello','preference':'reasoning'})
+  self.assertEqual(result.json()['selected'],'reasoning')
+  self.assertEqual(self.c.post('/public/route',json={'text':'hello','preference':'bad'}).status_code,422)
+  self.assertEqual(self.c.post('/public/route',json={'text':'x'*4001}).status_code,422)
+ def test_public_status_distinguishes_model_config(self):
+  self.assertEqual(self.c.get('/public/status').json()['provider_calls_available'],False)
+ def test_public_cors_allows_portfolio_only(self):
+  r=self.c.options('/public/route',headers={'origin':'https://kyaswanthneeli-stack.github.io','access-control-request-method':'POST'})
+  self.assertEqual(r.headers.get('access-control-allow-origin'),'https://kyaswanthneeli-stack.github.io')
+
 if __name__=='__main__':unittest.main()
