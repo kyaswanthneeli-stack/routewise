@@ -86,6 +86,50 @@ def create_app(providers=None, transport=None, api_key=None):
             if not isinstance(data.get('choices'),list) or not data['choices']: raise ValueError()
             return data
         except (ValueError,AttributeError): raise HTTPException(502,'Invalid upstream response')
+    demo_lock=asyncio.Lock()
+    demo_cache={}
+    demo_attempts=[]
+    demo_prompts={
+        'rag': 'Explain retrieval-augmented generation in two concise sentences.',
+        'tradeoff': 'Explain the architecture tradeoff between keyword search and vector search in three concise bullets.'
+    }
+    class PublicDemo(BaseModel):
+        example: str = Field(pattern='^(rag|tradeoff)$')
+    @app.post('/public/demo')
+    async def public_demo(payload: PublicDemo):
+        # Single-process portfolio demo: fixed inputs, short output, shared cache,
+        # serialized calls and a global six-attempt hourly budget (including failures).
+        async with demo_lock:
+            now=time.monotonic()
+            cached=demo_cache.get(payload.example)
+            if cached and now-cached[0]<3600:
+                return {**cached[1], 'cached':True}
+            demo_attempts[:]=[t for t in demo_attempts if now-t<3600]
+            if len(demo_attempts)>=6:
+                raise HTTPException(429,'Demo hourly limit reached. Please try later.')
+            tier,reason=classify([Message(role='user',content=demo_prompts[payload.example])])
+            provider=providers.get(tier) or providers.get('fast') or providers.get('reasoning')
+            if not provider or not provider.key or not provider.model:
+                raise HTTPException(503,'Live demo provider is not configured')
+            demo_attempts.append(now)
+            start=time.perf_counter()
+            try:
+                data=await invoke(provider,Chat(messages=[Message(role='user',content=demo_prompts[payload.example])],max_tokens=180))
+            except Retryable:
+                raise HTTPException(503,'Provider temporarily unavailable')
+            try:
+                answer=data['choices'][0]['message']['content']
+                if not isinstance(answer,str) or not answer: raise ValueError()
+            except (KeyError,IndexError,TypeError,ValueError):
+                raise HTTPException(502,'Provider returned no text answer')
+            result={'answer':answer,'prompt':demo_prompts[payload.example],
+                    'model':provider.model,'selected':provider.name,'requested_route':tier,
+                    'routing':reason,'latency_ms':round((time.perf_counter()-start)*1000,3),
+                    'generated_at':int(time.time()),'cached':False,'live_inference':True,
+                    'note':'Preset demo; responses cached for one hour. Limits are per process and reset on restart. No cost savings claimed.'}
+            demo_cache[payload.example]=(time.monotonic(),result)
+            return result
+
     @app.get('/health')
     def health(): return {'status':'ok','mode':'live' if providers else 'demo'}
     def authorize(key):
