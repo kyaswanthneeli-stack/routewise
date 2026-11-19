@@ -80,7 +80,7 @@ def create_app(providers=None, transport=None, api_key=None):
                 response=await client.post(provider.url.rstrip('/')+'/chat/completions',headers={'Authorization':'Bearer '+provider.key},json={'model':provider.model,'messages':[m.model_dump() for m in request.messages],'max_tokens':request.max_tokens,'stream':False})
             except (httpx.TimeoutException,httpx.NetworkError) as exc: raise Retryable() from exc
         if response.status_code==429 or response.status_code>=500: raise Retryable()
-        if response.status_code>=300: raise HTTPException(502,'Upstream rejected request; credentials and payload not logged')
+        if response.status_code>=300: raise HTTPException(502,f'Upstream rejected request (HTTP {response.status_code}); credentials and payload not logged')
         try:
             data=response.json()
             if not isinstance(data.get('choices'),list) or not data['choices']: raise ValueError()
