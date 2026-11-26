@@ -1,6 +1,7 @@
 """RouteWise: explicit heuristic routing with an optional OpenAI-shaped upstream."""
 import asyncio
 import hmac
+import json
 import os
 import time
 import uuid
@@ -35,6 +36,8 @@ class Provider:
     output_per_million:float=0.0
 
 class Retryable(Exception): pass
+
+MAX_PROVIDER_RESPONSE_BYTES = 1_000_000
 
 def create_app(providers=None, transport=None, api_key=None):
     api_key=api_key or os.getenv('ROUTEWISE_API_KEY')
@@ -77,12 +80,27 @@ def create_app(providers=None, transport=None, api_key=None):
         if not provider.url: return {'choices':[{'index':0,'message':{'role':'assistant','content':f'Demo response from {provider.name}; no language model was called.'},'finish_reason':'stop'}],'usage':{'prompt_tokens':0,'completion_tokens':0,'total_tokens':0}}
         async with httpx.AsyncClient(timeout=15,transport=transport,follow_redirects=False) as client:
             try:
-                response=await client.post(provider.url.rstrip('/')+'/chat/completions',headers={'Authorization':'Bearer '+provider.key},json={'model':provider.model,'messages':[m.model_dump() for m in request.messages],'max_tokens':request.max_tokens,'stream':False})
-            except (httpx.TimeoutException,httpx.NetworkError) as exc: raise Retryable() from exc
-        if response.status_code==429 or response.status_code>=500: raise Retryable()
-        if response.status_code>=300: raise HTTPException(502,f'Upstream rejected request (HTTP {response.status_code}); credentials and payload not logged')
+                async with client.stream(
+                    'POST', provider.url.rstrip('/')+'/chat/completions',
+                    headers={'Authorization':'Bearer '+provider.key, 'Accept-Encoding':'identity'},
+                    json={'model':provider.model, 'messages':[m.model_dump() for m in request.messages],
+                          'max_tokens':request.max_tokens, 'stream':False},
+                ) as response:
+                    if response.status_code==429 or response.status_code>=500:
+                        raise Retryable()
+                    if response.status_code>=300:
+                        raise HTTPException(502,f'Upstream rejected request (HTTP {response.status_code}); credentials and payload not logged')
+                    if response.headers.get('Content-Encoding','identity').lower()!='identity':
+                        raise HTTPException(502,'Unexpected upstream content encoding')
+                    body=bytearray()
+                    async for chunk in response.aiter_bytes(chunk_size=16384):
+                        if len(body)+len(chunk)>MAX_PROVIDER_RESPONSE_BYTES:
+                            raise HTTPException(502,'Upstream response exceeded size limit')
+                        body.extend(chunk)
+            except (httpx.TimeoutException,httpx.NetworkError) as exc:
+                raise Retryable() from exc
         try:
-            data=response.json()
+            data=json.loads(body)
             if not isinstance(data.get('choices'),list) or not data['choices']: raise ValueError()
             return data
         except (ValueError,AttributeError): raise HTTPException(502,'Invalid upstream response')
@@ -133,7 +151,7 @@ def create_app(providers=None, transport=None, api_key=None):
     @app.get('/health')
     def health(): return {'status':'ok','mode':'live' if providers else 'demo'}
     def authorize(key):
-        if not api_key or not key or not hmac.compare_digest(key,'Bearer '+api_key): raise HTTPException(401,'Valid bearer token required')
+        if not api_key or not key or not hmac.compare_digest(key.encode('utf-8'),('Bearer '+api_key).encode('utf-8')): raise HTTPException(401,'Valid bearer token required')
     @app.post('/v1/chat/completions')
     async def chat(request:Chat,authorization:str|None=Header(default=None)):
         authorize(authorization)
