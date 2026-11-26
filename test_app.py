@@ -1,11 +1,18 @@
 import unittest
 import httpx
 from fastapi.testclient import TestClient
-from app import create_app,Provider
+from app import create_app,Provider,MAX_PROVIDER_RESPONSE_BYTES
 class Tests(unittest.TestCase):
  def setUp(self):self.c=TestClient(create_app({},api_key='test'));self.h={'Authorization':'Bearer test'};self.req={'messages':[{'role':'user','content':'hello'}]}
  def post(self,c=None):return (c or self.c).post('/v1/chat/completions',json=self.req,headers=self.h)
  def test_auth(self):self.assertEqual(self.c.post('/v1/chat/completions',json=self.req).status_code,401)
+ def test_non_ascii_bearer_is_unauthorized(self):
+  r=self.c.post('/v1/chat/completions',json=self.req,headers=[(b'authorization','Bearer café'.encode('latin-1'))])
+  self.assertEqual(r.status_code,401)
+ def test_provider_size_limit(self):
+  r=self.post(self.client(lambda _:httpx.Response(200,content=b'x'*(MAX_PROVIDER_RESPONSE_BYTES+1))))
+  self.assertEqual(r.status_code,502)
+  self.assertIn('size limit',r.text)
  def test_simple(self):self.assertEqual(self.post().json()['routing']['selected'],'fast')
  def test_complex(self):self.req['messages'][0]['content']='Analyze tradeoffs';self.assertEqual(self.post().json()['routing']['selected'],'reasoning')
  def test_override(self):self.req['model']='reasoning';self.assertEqual(self.post().json()['routing']['selected'],'reasoning')
